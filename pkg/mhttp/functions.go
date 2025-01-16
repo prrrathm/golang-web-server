@@ -3,29 +3,25 @@ package mhttp
 import (
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"strconv"
-	"sync"
 )
 
-var counter int
-var mutex = &sync.Mutex{}
-var staticDirectory string
-
-// Replies to the request with the contents of the named file or directory
-func serveFile(w http.ResponseWriter, r *http.Request) {
-	http.ServeFile(w, r, staticDirectory)
+// serveFile serves the index.html or the requested file within the static directory
+func (s *ServerConfig) serveFile(w http.ResponseWriter, r *http.Request) {
+	path := filepath.Join(s.StaticDir, r.URL.Path)
+	http.ServeFile(w, r, path)
 }
 
-// Increments a counter every time the '/increment' page is requested
-// additionally the counter is replied back to the web browser
-func incrementCounter(w http.ResponseWriter, r *http.Request) {
-	mutex.Lock()
-	counter++
-	fmt.Fprint(w, strconv.Itoa(counter))
-	mutex.Unlock()
+// incrementCounter increases the counter and sends the current value as a response
+func (s *ServerConfig) incrementCounter(w http.ResponseWriter, r *http.Request) {
+	s.mutex.Lock()
+	s.counter++
+	fmt.Fprint(w, strconv.Itoa(s.counter))
+	s.mutex.Unlock()
 }
 
-// Just replies with the word 'Hi' as the body of the page
-func hiString(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "Hi")
+// hiHandler responds with a simple greeting
+func hiHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprint(w, "Hi")
 }

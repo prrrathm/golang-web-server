@@ -1,11 +1,13 @@
 package mhttp
 
 import (
-	"errors"
+	// "errors"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	// "path/filepath"
+	"sync"
 )
 
 type IServer interface {
@@ -15,66 +17,63 @@ type IServer interface {
 }
 
 type ServerConfig struct {
-	staticDirectory string
-	url             string
-	port            string
+	StaticDir string
+	URL       string
+	Port      string
+	counter   int
+	mutex     sync.Mutex
 }
 
-func NewServer(staticDir string, url string, port string) ServerConfig {
-	var serverConfig = ServerConfig{
-		staticDirectory: staticDir,
-		url:             url,
-		port:            port,
+func NewServer(staticDir, url, port string) *ServerConfig {
+	return &ServerConfig{
+		StaticDir: staticDir,
+		URL:       url,
+		Port:      port,
 	}
-	return serverConfig
 }
 
-// returns a handler that serves HTTP requests with the contents of the file system rooted at root
-func (fs ServerConfig) InitializeFileServer() error {
-	fmt.Println("Initializing handler with FileServer")
+func (s *ServerConfig) InitializeFileServer() error {
+	fmt.Println("Initializing static file server...")
 
-	if err := validateFolder(fs.staticDirectory); err != nil {
-		return errors.New("couldn't validate static folder, error: " + err.Error())
+	if err := validateFolder(s.StaticDir); err != nil {
+		return fmt.Errorf("couldn't validate static folder: %w", err)
 	}
 
-	http.Handle("/", http.FileServer(http.Dir(fs.staticDirectory)))
-	fmt.Println("Handler has been initialized")
+	fs := http.FileServer(http.Dir(s.StaticDir))
+	http.Handle("/", fs)
+
+	fmt.Println("Static file handler initialized.")
 	return nil
 }
 
-// starts listenning the port and serves the requests
-func (fs ServerConfig) ListenAndServe() {
-	serverUrl := fs.url + ":" + fs.port
-	fmt.Printf("Listening on %s...\n", serverUrl)
-	log.Fatal(http.ListenAndServe(serverUrl, nil))
-}
+func (s *ServerConfig) InitializeHandlerFunctions() error {
+	fmt.Println("Initializing dynamic route handlers...")
 
-// Initializes all the handler functions
-func (fs ServerConfig) InitializeHandlerFunctions() error {
-	staticDirectory = fs.staticDirectory
-	fmt.Println("Initializing the handler functions...")
-
-	if err := validateFolder(fs.staticDirectory); err != nil {
-		return errors.New("couldn't validate static folder, error: " + err.Error())
+	if err := validateFolder(s.StaticDir); err != nil {
+		return fmt.Errorf("couldn't validate static folder: %w", err)
 	}
 
-	http.HandleFunc("/", serveFile)
-	http.HandleFunc("/increment", incrementCounter)
-	http.HandleFunc("/hi", hiString)
-	fmt.Println("Handler functions have been initialized")
+	http.HandleFunc("/", s.serveFile)
+	http.HandleFunc("/increment", s.incrementCounter)
+	http.HandleFunc("/hi", hiHandler)
+
+	fmt.Println("Dynamic handlers initialized.")
 	return nil
 }
 
-func validateFolder(folderPath string) error {
-	fileInfo, err := os.Stat(folderPath)
+func (s *ServerConfig) ListenAndServe() {
+	address := fmt.Sprintf("%s:%s", s.URL, s.Port)
+	fmt.Printf("Server listening at http://%s\n", address)
+	log.Fatal(http.ListenAndServe(address, nil))
+}
 
+func validateFolder(path string) error {
+	info, err := os.Stat(path)
 	if err != nil {
 		return err
 	}
-
-	if fileInfo != nil && !fileInfo.IsDir() {
-		return fmt.Errorf("%s : is not a directory", folderPath)
+	if !info.IsDir() {
+		return fmt.Errorf("%s is not a directory", path)
 	}
-
 	return nil
 }
