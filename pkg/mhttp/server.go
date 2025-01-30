@@ -1,19 +1,16 @@
 package mhttp
 
 import (
-	// "errors"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
-	// "path/filepath"
 	"sync"
 )
 
 type IServer interface {
 	InitializeFileServer() error
 	InitializeHandlerFunctions() error
-	ListenAndServe()
+	ListenAndServe() error
 }
 
 type ServerConfig struct {
@@ -36,7 +33,7 @@ func (s *ServerConfig) InitializeFileServer() error {
 	fmt.Println("Initializing static file server...")
 
 	if err := validateFolder(s.StaticDir); err != nil {
-		return fmt.Errorf("couldn't validate static folder: %w", err)
+		return fmt.Errorf("static folder validation failed: %w", err)
 	}
 
 	fs := http.FileServer(http.Dir(s.StaticDir))
@@ -50,7 +47,7 @@ func (s *ServerConfig) InitializeHandlerFunctions() error {
 	fmt.Println("Initializing dynamic route handlers...")
 
 	if err := validateFolder(s.StaticDir); err != nil {
-		return fmt.Errorf("couldn't validate static folder: %w", err)
+		return fmt.Errorf("static folder validation failed: %w", err)
 	}
 
 	http.HandleFunc("/", s.serveFile)
@@ -61,16 +58,23 @@ func (s *ServerConfig) InitializeHandlerFunctions() error {
 	return nil
 }
 
-func (s *ServerConfig) ListenAndServe() {
+func (s *ServerConfig) ListenAndServe() error {
 	address := fmt.Sprintf("%s:%s", s.URL, s.Port)
 	fmt.Printf("Server listening at http://%s\n", address)
-	log.Fatal(http.ListenAndServe(address, nil))
+
+	if err := http.ListenAndServe(address, nil); err != nil {
+		return fmt.Errorf("failed to start server: %w", err)
+	}
+	return nil
 }
 
 func validateFolder(path string) error {
 	info, err := os.Stat(path)
 	if err != nil {
-		return err
+		if os.IsNotExist(err) {
+			return fmt.Errorf("directory does not exist: %s", path)
+		}
+		return fmt.Errorf("error accessing directory %s: %w", path, err)
 	}
 	if !info.IsDir() {
 		return fmt.Errorf("%s is not a directory", path)
